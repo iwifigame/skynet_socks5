@@ -9,6 +9,10 @@ local CMD = {}
 local REQUEST = {}
 local client_fd
 
+local function read(n)
+	return socket.read(client_fd, n)
+end
+
 function REQUEST:get()
 end
 
@@ -36,39 +40,87 @@ local function send_package(pack)
 	socket.write(client_fd, package)
 end
 
-skynet.register_protocol {
-	name = "client",
-	id = skynet.PTYPE_CLIENT,
-	unpack = function (msg, sz)
-		return host:dispatch(msg, sz)
-	end,
-	dispatch = function (fd, _, type, ...)
-		assert(fd == client_fd)	-- You can use fd to reply message
-		skynet.ignoreret()	-- session is fd, don't call skynet.ret
-		skynet.trace()
-		if type == "REQUEST" then
-			local ok, result  = pcall(request, ...)
-			if ok then
-				if result then
-					send_package(result)
-				end
-			else
-				skynet.error(result)
-			end
-		else
-			assert(type == "RESPONSE")
-			error "This example doesn't support request client"
-		end
+local function handIdentifie()
+	local data = read(2)
+	logBuff(data)
+	local ver = string.byte(data, 1)
+	local nmethods = string.byte(data, 2)
+	data = read(nmethods)
+	local methods = {}
+	for i = 1, nmethods do
+		methods[i] = string.byte(data, i)
 	end
-}
+	log(methods)
+
+	socket.write(client_fd, "\5\0")
+end
+
+local function sendResponse()
+	local response = "\5\0\0\1\127\127\127\1\0\0"
+		-- buf[8] = 8555 >> 8;
+		-- buf[9] = 8555 % 256;
+	socket.write(client_fd, response)
+end
+
+local function handleRequest()
+	local data = read(4)
+	logBuff(data)
+	local ver = string.byte(data, 1)
+	local cmd = string.byte(data, 2)
+	local rsv = string.byte(data, 3)
+	local atyp = string.byte(data, 4)
+	log(ver, cmd, rsv, atyp)
+
+	local dstFd
+
+	if atyp == 3 then
+		local addrLen = string.byte(read(1),  1)
+		local addr = read(addrLen)
+		local data = read(2)
+		logBuff(data)
+		local port = (string.byte(data, 1) << 8) + string.byte(data, 2)
+		INFO("address", addr, port)
+
+		dstFd = socket.open(addr, port)
+	end
+
+	sendResponse()
+
+	-- local data = read(32)
+	-- logBuff(data)
+	skynet.fork(function()
+		while true do
+			local data = read()
+			if not data then
+				break
+			end
+			-- logBuff(data)
+			socket.write(dstFd, data)
+		end
+	end)
+	while true do
+		local data = socket.read(dstFd)
+		if not data then
+			break
+		end
+		-- logBuff(data)
+		socket.write(client_fd, data)
+	end
+end
 
 function CMD.start(conf)
 	local fd = conf.client
-	local gate = conf.gate
 	WATCHDOG = conf.watchdog
 
 	client_fd = fd
-	skynet.call(gate, "lua", "forward", fd)
+	socket.start(client_fd)
+
+	socket.onclose(client_fd, function()
+		ERROR("client fd close")
+	end)
+
+	handIdentifie()
+	handleRequest()
 end
 
 function CMD.disconnect()

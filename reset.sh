@@ -1,7 +1,7 @@
 #!/bin/bash
 
-export SERVER_PORT=6002
-export CONSOLE_PORT=7002
+export SERVER_PORT=8555
+export CONSOLE_PORT=7555
 
 # 退出已经启动的服务器
 # 通过服务器监听的端口来找到对应的服务器进程,然后退出
@@ -40,7 +40,7 @@ fi
 # ../skynet/skynet config.lua
 /data/skynet_note/skynet config.lua &
 
-sleep 2
+sleep 0.1
 
 cat $logFileName
 
