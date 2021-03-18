@@ -1,70 +1,49 @@
 local skynet = require "skynet"
 local socket = require "skynet.socket"
 
-local WATCHDOG
-local host
-local send_request
-
 local CMD = {}
-local REQUEST = {}
-local client_fd
+local srcFds = {}
+local dstFds = {}
+local srcTodstFds = {}
 
-local function read(n)
-	return socket.read(client_fd, n)
+local function read(srcFd, n)
+	-- local data, err = socket.read(srcFd, n)
+
+	-- if not data then
+	-- 	ERROR(err)
+	-- 	return
+	-- end
+
+	-- return data
+	return socket.read(srcFd, n)
 end
 
-function REQUEST:get()
+local function write(srcFd, pack)
+	return socket.write(srcFd, pack)
 end
 
-function REQUEST:set()
-end
-
-function REQUEST:handshake()
-	return { msg = "Welcome to skynet, I will send heartbeat every 5 sec." }
-end
-
-function REQUEST:quit()
-	skynet.call(WATCHDOG, "lua", "close", client_fd)
-end
-
-local function request(name, args, response)
-	local f = assert(REQUEST[name])
-	local r = f(args)
-	if response then
-		return response(r)
-	end
-end
-
-local function send_package(pack)
-	local package = string.pack(">s2", pack)
-	socket.write(client_fd, package)
-end
-
-local function handIdentifie()
-	local data = read(2)
-	logBuff(data)
+local function handIdentifie(srcFd)
+	local data = read(srcFd,2)
 	local ver = string.byte(data, 1)
 	local nmethods = string.byte(data, 2)
-	data = read(nmethods)
+	data = read(srcFd,nmethods)
 	local methods = {}
 	for i = 1, nmethods do
 		methods[i] = string.byte(data, i)
 	end
-	log(methods)
 
-	socket.write(client_fd, "\5\0")
+	write(srcFd,"\5\0")
 end
 
-local function sendResponse()
+local function sendResponse(srcFd)
 	local response = "\5\0\0\1\127\127\127\1\0\0"
 		-- buf[8] = 8555 >> 8;
 		-- buf[9] = 8555 % 256;
-	socket.write(client_fd, response)
+	write(srcFd,response)
 end
 
-local function handleRequest()
-	local data = read(4)
-	logBuff(data)
+local function handleRequest(srcFd)
+	local data = read(srcFd,4)
 	local ver = string.byte(data, 1)
 	local cmd = string.byte(data, 2)
 	local rsv = string.byte(data, 3)
@@ -72,66 +51,82 @@ local function handleRequest()
 	log(ver, cmd, rsv, atyp)
 
 	local dstFd
+	local err
 
 	if atyp == 3 then
-		local addrLen = string.byte(read(1),  1)
-		local addr = read(addrLen)
-		local data = read(2)
-		logBuff(data)
+		local data = read(srcFd,1)
+		local addrLen = string.byte(data, 1)
+		local addr = read(srcFd,addrLen)
+		data = read(srcFd,2)
 		local port = (string.byte(data, 1) << 8) + string.byte(data, 2)
-		INFO("address", addr, port)
+		INFO("handle request. dst address", addr, port)
 
-		dstFd = socket.open(addr, port)
+		dstFd, err = socket.open(addr, port)
+		if not dstFd then
+			ERROR("connect to dst addr failed.", addr, port, err)
+			return
+		end
+		WARN("connected dstFd:", dstFd)
+		dstFds[dstFd] = true
+		srcTodstFds[srcFd] = dstFd
+		socket.onclose(dstFd, function()
+			INFO("client dstFd close, srcFd-dstFd:", srcFd, dstFd)
+			dstFds[dstFd] = nil
+		end)
+	else
+		ERROR("atype not handed", atyp)
+		return
 	end
 
-	sendResponse()
+	sendResponse(srcFd)
 
-	-- local data = read(32)
-	-- logBuff(data)
 	skynet.fork(function()
-		while true do
-			local data = read()
+		while srcFds[srcFd] do
+			local data = read(srcFd)
 			if not data then
 				break
 			end
-			-- logBuff(data)
 			socket.write(dstFd, data)
 		end
 	end)
-	while true do
-		local data = socket.read(dstFd)
+	while dstFds[dstFd] do
+		local data = read(dstFd)
 		if not data then
 			break
 		end
-		-- logBuff(data)
-		socket.write(client_fd, data)
+		write(srcFd, data)
 	end
+	WARN("agent end<===========", srcFd)
 end
 
 function CMD.start(conf)
 	local fd = conf.client
-	WATCHDOG = conf.watchdog
 
-	client_fd = fd
-	socket.start(client_fd)
+	local srcFd = fd
+	socket.start(srcFd)
 
-	socket.onclose(client_fd, function()
-		ERROR("client fd close")
+	WARN("agent start===========>", srcFd)
+
+	srcFds[srcFd] = true
+
+	socket.onclose(srcFd, function()
+		srcFds[srcFd] = nil
+		local dstFd = srcTodstFds[srcFd]
+		INFO("client srcFd close. srcFd-dstFd:", srcFd, dstFd)
+		socket.close(dstFd)
+		srcTodstFds[srcFd] = nil
 	end)
 
-	handIdentifie()
-	handleRequest()
-end
-
-function CMD.disconnect()
-	-- todo: do something before exit
-	skynet.exit()
+	handIdentifie(srcFd)
+	handleRequest(srcFd)
 end
 
 skynet.start(function()
 	skynet.dispatch("lua", function(_,_, command, ...)
 		-- skynet.trace()
 		local f = CMD[command]
-		skynet.ret(skynet.pack(f(...)))
+		-- skynet.retpack(f(...))
+		local ok, data = xpcall(f, __G__TRACKBACK__, ...)
+		skynet.retpack(data)
 	end)
 end)

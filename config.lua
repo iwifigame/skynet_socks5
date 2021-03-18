@@ -6,7 +6,7 @@ CONSOLE_PORT = "$CONSOLE_PORT"
 SERVER_PORT  = "$SERVER_PORT"
 
 start      = "main"
-thread     = 4
+thread     = 2
 logger     = "log_0.txt"
 logservice = "logger"
 
