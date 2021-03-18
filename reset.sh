@@ -37,8 +37,8 @@ if [ -f "$logFileName" ]; then
     mv $logFileName $logBakFileName
 fi
 
-# ../skynet/skynet config.lua
-/data/skynet_note/skynet config.lua &
+# ./skynet/skynet config.lua
+./skynet/skynet config.lua &
 
 sleep 0.1
 
