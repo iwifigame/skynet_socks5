@@ -6,6 +6,12 @@ local srcFds = {}
 local dstFds = {}
 local srcTodstFds = {}
 
+local ATYP = {
+	ipv4 = 1,
+	domain = 3,
+	ipv6 = 4,
+}
+
 local function read(srcFd, n)
 	-- local data, err = socket.read(srcFd, n)
 
@@ -53,30 +59,43 @@ local function handleRequest(srcFd)
 	local dstFd
 	local err
 
-	if atyp == 3 then
+	if atyp == ATYP.domain then
 		local data = read(srcFd,1)
 		local addrLen = string.byte(data, 1)
 		local addr = read(srcFd,addrLen)
 		data = read(srcFd,2)
 		local port = (string.byte(data, 1) << 8) + string.byte(data, 2)
-		INFO("handle request. dst address", addr, port)
+		INFO("handle request. dst domain", addr, port)
 
 		dstFd, err = socket.open(addr, port)
 		if not dstFd then
 			ERROR("connect to dst addr failed.", addr, port, err)
 			return
 		end
-		WARN("connected dstFd:", dstFd)
-		dstFds[dstFd] = true
-		srcTodstFds[srcFd] = dstFd
-		socket.onclose(dstFd, function()
-			INFO("client dstFd close, srcFd-dstFd:", srcFd, dstFd)
-			dstFds[dstFd] = nil
-		end)
+	elseif atyp == ATYP.ipv4 then
+		local data = read(srcFd,4)
+		local ipv4 = string.byte(data, 1) .. "." .. string.byte(data, 2) .. "." .. string.byte(data, 3) .. "." .. string.byte(data, 4)
+		data = read(srcFd, 2)
+		local port = (string.byte(data, 1) << 8) + string.byte(data, 2)
+		INFO("handle request. dst ipv4", ipv4, port)
+
+		dstFd, err = socket.open(ipv4, port)
+		if not dstFd then
+			ERROR("connect to dst ipv4 failed.", ipv4, port, err)
+			return
+		end
 	else
 		ERROR("atype not handed", atyp)
 		return
 	end
+
+	WARN("connected dstFd:", dstFd)
+	dstFds[dstFd] = true
+	srcTodstFds[srcFd] = dstFd
+	socket.onclose(dstFd, function()
+		INFO("client dstFd close, srcFd-dstFd:", srcFd, dstFd)
+		dstFds[dstFd] = nil
+	end)
 
 	sendResponse(srcFd)
 
