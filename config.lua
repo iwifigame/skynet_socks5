@@ -1,5 +1,5 @@
 -- skynet根目录
-skynet_root = "/data/skynet_note/"
+skynet_root = "./skynet/"
 proj_root   = "./"
 
 CONSOLE_PORT = "$CONSOLE_PORT"
