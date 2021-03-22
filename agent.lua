@@ -58,30 +58,32 @@ local function handleRequest(srcFd)
 
 	local dstFd
 	local err
+	local dstAddr
+	local dstPort
 
 	if atyp == ATYP.domain then
 		local data = read(srcFd,1)
 		local addrLen = string.byte(data, 1)
-		local addr = read(srcFd,addrLen)
+		dstAddr = read(srcFd,addrLen)
 		data = read(srcFd,2)
-		local port = (string.byte(data, 1) << 8) + string.byte(data, 2)
-		INFO("handle request. dst domain", addr, port)
+		dstPort = (string.byte(data, 1) << 8) + string.byte(data, 2)
+		INFO("handle request. dst domain", dstAddr, dstPort)
 
-		dstFd, err = socket.open(addr, port)
+		dstFd, err = socket.open(dstAddr, dstPort)
 		if not dstFd then
-			ERROR("connect to dst addr failed.", addr, port, err)
+			ERROR("connect to dst addr failed.", dstAddr, dstPort, err)
 			return
 		end
 	elseif atyp == ATYP.ipv4 then
 		local data = read(srcFd,4)
-		local ipv4 = string.byte(data, 1) .. "." .. string.byte(data, 2) .. "." .. string.byte(data, 3) .. "." .. string.byte(data, 4)
+		dstAddr = string.byte(data, 1) .. "." .. string.byte(data, 2) .. "." .. string.byte(data, 3) .. "." .. string.byte(data, 4)
 		data = read(srcFd, 2)
-		local port = (string.byte(data, 1) << 8) + string.byte(data, 2)
-		INFO("handle request. dst ipv4", ipv4, port)
+		dstPort = (string.byte(data, 1) << 8) + string.byte(data, 2)
+		INFO("handle request. dst ipv4", dstAddr, dstPort)
 
-		dstFd, err = socket.open(ipv4, port)
+		dstFd, err = socket.open(dstAddr, dstPort)
 		if not dstFd then
-			ERROR("connect to dst ipv4 failed.", ipv4, port, err)
+			ERROR("connect to dst ipv4 failed.", dstAddr, dstPort, err)
 			return
 		end
 	else
@@ -89,7 +91,7 @@ local function handleRequest(srcFd)
 		return
 	end
 
-	WARN("connected dstFd:", dstFd)
+	WARN("connected dstFd:", dstFd, dstAddr, dstPort)
 	dstFds[dstFd] = true
 	srcTodstFds[srcFd] = dstFd
 	socket.onclose(dstFd, function()
