@@ -13,15 +13,14 @@ local ATYP = {
 }
 
 local function read(srcFd, n)
-	-- local data, err = socket.read(srcFd, n)
+	local data, err = socket.read(srcFd, n)
 
-	-- if not data then
-	-- 	ERROR(err)
-	-- 	return
-	-- end
+	if not data then
+		error(err)
+		return
+	end
 
-	-- return data
-	return socket.read(srcFd, n)
+	return data
 end
 
 local function write(srcFd, pack)
@@ -29,7 +28,7 @@ local function write(srcFd, pack)
 end
 
 local function handIdentifie(srcFd)
-	local data = read(srcFd,2)
+	local data = read(srcFd, 2)
 	local ver = string.byte(data, 1)
 	local nmethods = string.byte(data, 2)
 	data = read(srcFd,nmethods)
@@ -146,8 +145,8 @@ skynet.start(function()
 	skynet.dispatch("lua", function(_,_, command, ...)
 		-- skynet.trace()
 		local f = CMD[command]
-		-- skynet.retpack(f(...))
-		local ok, data = xpcall(f, __G__TRACKBACK__, ...)
-		skynet.retpack(data)
+		skynet.retpack(f(...))
+		-- local ok, data = xpcall(f, __G__TRACKBACK__, ...)
+		-- skynet.retpack(data)
 	end)
 end)
