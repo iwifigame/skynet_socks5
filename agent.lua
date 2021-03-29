@@ -12,11 +12,13 @@ local ATYP = {
 	ipv6 = 4,
 }
 
-local function read(srcFd, n)
-	local data, err = socket.read(srcFd, n)
+local function read(fd, n)
+	local data, err = socket.read(fd, n)
 
 	if not data then
-		error(err)
+		if srcFds[fd] or dstFds[fd] then
+			error(err)
+		end
 		return
 	end
 
