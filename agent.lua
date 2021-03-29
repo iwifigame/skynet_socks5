@@ -143,6 +143,15 @@ function CMD.start(conf)
 	handleRequest(srcFd)
 end
 
+skynet.info_func(function()
+	local info = {
+		srcFds = srcFds,
+		dstFds = dstFds,
+		srcTodstFds = srcTodstFds,
+	}
+	return info
+end)
+
 skynet.start(function()
 	skynet.dispatch("lua", function(_,_, command, ...)
 		-- skynet.trace()
