@@ -11,7 +11,7 @@ function CMD.start(conf)
 		INFO(string.format("accept client socket_id: %s addr:%s", id, addr))
 		-- local agent = skynet.newservice("agent")
 		-- skynet.call(agent, "lua", "start", {client = id, watchdog = skynet.self()})
-		skynet.call(agents[agentIndex], "lua", "start", {client = id, watchdog = skynet.self()})
+		skynet.send(agents[agentIndex], "lua", "start", {client = id, watchdog = skynet.self()})
 		agentIndex = agentIndex + 1
 		if agentIndex > 10 then
 			agentIndex = 1
