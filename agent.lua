@@ -118,7 +118,7 @@ local function handleRequest(srcFd)
 		end
 		write(srcFd, data)
 	end
-	WARN("agent end<===========", srcFd)
+	WARN("agent end<===========", srcFd, dstFd)
 end
 
 function CMD.start(conf)
