@@ -12,6 +12,15 @@ local ATYP = {
 	ipv6 = 4,
 }
 
+local function getSocketInfo(fd)
+	local socketInfos = socket.netstat()
+	for _, v in ipairs(socketInfos) do
+		if v.id == fd then
+			return v
+		end
+	end
+end
+
 local function read(fd, n)
 	local data, err = socket.read(fd, n)
 
@@ -110,15 +119,23 @@ local function handleRequest(srcFd)
 			end
 			socket.write(dstFd, data)
 		end
+		WARN("agent srcFd read end<===========", srcFd, dstFd)
 	end)
+	local sleepTime = 10
 	while dstFds[dstFd] do
 		local data = read(dstFd)
 		if not data then
 			break
 		end
 		write(srcFd, data)
+
+		local socketInfo = getSocketInfo(srcFd)
+		if socketInfo.wbuffer > 1024 * 1024 * 10 then
+			skynet.sleep(sleepTime) -- sleep wait srcFd send data
+			sleepTime = sleepTime * 2
+		end
 	end
-	WARN("agent end<===========", srcFd, dstFd)
+	WARN("agent dstFd read end<===========", srcFd, dstFd)
 end
 
 function CMD.start(conf)
