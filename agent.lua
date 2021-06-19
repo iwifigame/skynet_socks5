@@ -121,7 +121,6 @@ local function handleRequest(srcFd)
 		end
 		WARN("agent srcFd read end<===========", srcFd, dstFd)
 	end)
-	local sleepTime = 10
 	while dstFds[dstFd] do
 		local data = read(dstFd)
 		if not data then
@@ -130,9 +129,11 @@ local function handleRequest(srcFd)
 		write(srcFd, data)
 
 		local socketInfo = getSocketInfo(srcFd)
-		if socketInfo.wbuffer > 1024 * 1024 * 10 then
-			skynet.sleep(sleepTime) -- sleep wait srcFd send data
-			sleepTime = sleepTime * 2
+		while socketInfo.wbuffer > 1024 * 1024 * 10 do
+			-- WARN("sleep start...", socketInfo.wbuffer)
+			skynet.sleep(10) -- sleep wait srcFd send data
+			-- WARN("sleep end")
+			socketInfo = getSocketInfo(srcFd)
 		end
 	end
 	WARN("agent dstFd read end<===========", srcFd, dstFd)
